@@ -4,6 +4,7 @@ import filecmp
 import os
 from pprint import pprint
 
+import humanize
 from pathquery import pathquery
 
 
@@ -16,6 +17,13 @@ def main():
         nargs='+',
         type=str,
         help='One or more folders to scan for images'
+    )
+    parser.add_argument(
+        '--dry-run',
+        '-d',
+        action='store_true',
+        default=False,
+        dest='dry_run'
     )
     args = parser.parse_args()
 
@@ -56,16 +64,69 @@ def main():
         if len(matches) > 0:
             duplicates.append(list(matches))
 
-    if len(duplicates) > 0:
-        print('The following duplicates were found....\n')
-        for count, dupe in enumerate(duplicates):
-            print('** Match {} **'.format(count + 1))
-            for file in dupe:
-                print('  {}'.format(file))
-            print('')
+    total_duplicates = sum([len(v) - 1 for v in files_by_size.values()])
+    total_savings = humanize.naturalsize(
+        sum([k * (len(v) - 1) for k, v in files_by_size.items()])
+    )
+
+    if args.dry_run:
+        print(
+            '\nFound {} duplicate files\n'
+            'Deleting these files would free up {} of disk space.\n'.format(
+                total_duplicates,
+                total_savings
+            )
+        )
 
     else:
-        print('No duplicates found')
+        total_deleted = 0
+        for count, paths in enumerate(duplicates):
+            # input('This is a test')
+            # print('The following duplicates were found....\n')
+
+            prompt = 'Match {}\n' \
+                     '{}\n\n' \
+                     'Enter the number(s) of the file(s) to be ' \
+                     'deleted (separated by spaces): '.format(
+                        count + 1,
+                        '\n'.join([
+                            '  {}. {}'.format(
+                                count + 1, path
+                            ) for count, path in enumerate(paths)
+                        ])
+                      )
+
+            answer = [x for x in input(prompt).split(' ') if x != '']
+            while not is_valid(answer, len(paths)):
+                print('\nPlease enter valid numbers separated by spaces')
+                answer = [x for x in input(prompt).split(' ') if x != '']
+
+            if len(answer) == 0:
+                print('Skipping Match {}'.format(count + 1))
+                continue
+
+            to_delete = [paths[x - 1] for x in list(map(int, answer))]
+            for file in to_delete:
+                os.unlink(file)
+                total_deleted += 1
+
+        print('\nDeleted {} duplicate file{}\n'.format(
+            total_deleted, 's' if total_deleted != 1 else ''
+        ))
+
+
+def is_valid(answer, file_count):
+    if len(answer) == 0:
+        return True
+
+    if False in [x.isnumeric() for x in answer]:
+        return False
+
+    selections = list(map(int, answer))
+    if min(selections) < 0 or max(selections) > file_count:
+        return False
+
+    return True
 
 
 if __name__ == '__main__':
