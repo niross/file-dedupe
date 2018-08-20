@@ -22,7 +22,8 @@ class ImgDD(object):
     files = []
 
     def __init__(self, directories: list):
-        self.files = self._build_file_list(directories)
+        self.directories = directories
+        self.files = self._build_file_list(self.directories)
 
     @staticmethod
     def _build_file_list(directories: list) -> list:
@@ -41,6 +42,40 @@ class ImgDD(object):
             files_by_size[size].append(file)
         return {k: v for k, v in files_by_size.items() if len(v) > 1}
 
+    def _confirm_run(self, auto):
+        dirs = '\n'.join(self.directories)
+        message = (
+            '\nFinding duplicate files in the following directories:\n\n'
+            F'{dirs}\n\n'
+        )
+        if auto:
+            message += 'Duplicates will be deleted automatically\n'
+        else:
+            message += 'You will be prompted to select which files to delete\n'
+
+        message += '\nAre you sure you want to continue? [Y/n] '
+        answer = input(message)
+        while answer.lower() not in ['', 'y', 'n']:
+            answer = input('\nPlease enter Y or N')
+
+        return answer.lower() in ['', 'y']
+
+    def run(self, dry_run=False, auto=False):
+        if dry_run:
+            self._dry_run()
+            return
+
+        if not self._confirm_run(auto):
+            return
+
+        if auto:
+            self._auto_delete_duplicates()
+        else:
+            self._prompt_delete_duplicates()
+
+    def _shallow_compare(self):
+        pass
+
     def _find_duplicates(self) -> list:
         duplicates = []
         for files in self._group_files_by_size().values():
@@ -53,7 +88,7 @@ class ImgDD(object):
                 duplicates.append(list(matches))
         return duplicates
 
-    def dry_run(self):
+    def _dry_run(self):
         duplicates = self._find_duplicates()
 
         if len(duplicates) == 0:
@@ -77,7 +112,7 @@ class ImgDD(object):
         )
 
     @staticmethod
-    def is_valid_input_choice(answer, file_count):
+    def _is_valid_input_choice(answer, file_count):
         if len(answer) == 0:
             return True
 
@@ -90,7 +125,7 @@ class ImgDD(object):
 
         return True
 
-    def prompt_delete_duplicates(self):
+    def _prompt_delete_duplicates(self):
         total_deleted = 0
         for count, paths in enumerate(self._find_duplicates()):
             prompt = 'Match {}\n' \
@@ -106,7 +141,7 @@ class ImgDD(object):
                       )
 
             answer = [x for x in input(prompt).split(' ') if x != '']
-            while not self.is_valid_input_choice(answer, len(paths)):
+            while not self._is_valid_input_choice(answer, len(paths)):
                 print('\nPlease enter valid numbers separated by spaces')
                 answer = [x for x in input(prompt).split(' ') if x != '']
 
@@ -124,7 +159,7 @@ class ImgDD(object):
             total_deleted, 's' if total_deleted != 1 else ''
         ))
 
-    def auto_delete_duplicates(self):
+    def _auto_delete_duplicates(self):
         total_deleted = 0
         for count, files in enumerate(self._find_duplicates()):
             for file in files[1:]:
@@ -138,7 +173,7 @@ class ImgDD(object):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Blah rar and jah'
+        description='Find and delete duplicate files across directories'
     )
     parser.add_argument(
         'folder',
@@ -183,12 +218,7 @@ def main():
             raise parser.error('{} is not a valid path'.format(folder))
 
     imgdd = ImgDD(folders)
-    if args.dry_run:
-        imgdd.dry_run()
-    elif args.auto:
-        imgdd.auto_delete_duplicates()
-    else:
-        imgdd.prompt_delete_duplicates()
+    imgdd.run(dry_run=args.dry_run, auto=args.auto)
 
 
 if __name__ == '__main__':
