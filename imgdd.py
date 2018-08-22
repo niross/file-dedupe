@@ -42,12 +42,18 @@ class ImgDD(object):
             files_by_size[size].append(file)
         return {k: v for k, v in files_by_size.items() if len(v) > 1}
 
-    def _confirm_run(self, auto):
+    def _confirm_run(self, auto: bool, same_dir_only: bool) -> bool:
         dirs = '\n'.join(self.directories)
         message = (
             '\nFinding duplicate files in the following directories:\n\n'
             F'{dirs}\n\n'
         )
+        if same_dir_only:
+            message += (
+                'Only duplicates found in the same folder will be '
+                'taken into account\n\n'
+            )
+
         if auto:
             message += 'Duplicates will be deleted automatically\n'
         else:
@@ -60,36 +66,52 @@ class ImgDD(object):
 
         return answer.lower() in ['', 'y']
 
-    def run(self, dry_run=False, auto=False):
+    def run(self, dry_run=False, auto=False, same_dir_only=False):
         if dry_run:
-            self._dry_run()
+            self._dry_run(same_dir_only=same_dir_only)
             return
 
-        if not self._confirm_run(auto):
+        if not self._confirm_run(auto=auto, same_dir_only=same_dir_only):
             return
 
         if auto:
-            self._auto_delete_duplicates()
+            self._auto_delete_duplicates(same_dir_only=same_dir_only)
         else:
-            self._prompt_delete_duplicates()
+            self._prompt_delete_duplicates(same_dir_only=same_dir_only)
 
     def _shallow_compare(self):
         pass
 
-    def _find_duplicates(self) -> list:
+    def _group_files_by_directory(self, files):
+        directories = {}
+        for file in files:
+            directory = os.path.dirname(file)
+            if directory not in directories:
+                directories[directory] = []
+            directories[directory].append(file)
+        return [x for x in directories.values() if len(x) > 1]
+
+    def _find_duplicates(self, same_dir_only: bool) -> list:
         duplicates = []
         for files in self._group_files_by_size().values():
-            matches = set()
+            found = []
             for i in range(len(files)):
+                matches = set()
                 for j in range(i + 1, len(files)):
-                    if filecmp.cmp(files[i], files[j]):
+                    if filecmp.cmp(files[i], files[j]) \
+                            and files[j] not in found:
                         matches.update([files[i], files[j]])
-            if len(matches) > 0:
-                duplicates.append(list(matches))
+                        found.append(files[j])
+                if len(matches) > 0:
+                    if same_dir_only:
+                        for grouped in self._group_files_by_directory(matches):
+                            duplicates.append(grouped)
+                    else:
+                        duplicates.append(list(matches))
         return duplicates
 
-    def _dry_run(self):
-        duplicates = self._find_duplicates()
+    def _dry_run(self, same_dir_only: bool):
+        duplicates = self._find_duplicates(same_dir_only=same_dir_only)
 
         if len(duplicates) == 0:
             print('No duplicate files found')
@@ -112,7 +134,7 @@ class ImgDD(object):
         )
 
     @staticmethod
-    def _is_valid_input_choice(answer, file_count):
+    def _is_valid_input_choice(answer: str, file_count: int) -> bool:
         if len(answer) == 0:
             return True
 
@@ -125,9 +147,10 @@ class ImgDD(object):
 
         return True
 
-    def _prompt_delete_duplicates(self):
+    def _prompt_delete_duplicates(self, same_dir_only: bool):
         total_deleted = 0
-        for count, paths in enumerate(self._find_duplicates()):
+        dupes = self._find_duplicates(same_dir_only=same_dir_only)
+        for count, paths in enumerate(dupes):
             prompt = 'Match {}\n' \
                      '{}\n\n' \
                      'Enter the number(s) of the file(s) to be ' \
@@ -159,9 +182,10 @@ class ImgDD(object):
             total_deleted, 's' if total_deleted != 1 else ''
         ))
 
-    def _auto_delete_duplicates(self):
+    def _auto_delete_duplicates(self, same_dir_only: bool):
         total_deleted = 0
-        for count, files in enumerate(self._find_duplicates()):
+        dupes = self._find_duplicates(same_dir_only=same_dir_only)
+        for count, files in enumerate(dupes):
             for file in files[1:]:
                 log.info('Deleting duplicate %s', file)
                 os.unlink(file)
@@ -186,21 +210,32 @@ def main():
         '-d',
         action='store_true',
         default=False,
-        dest='dry_run'
+        dest='dry_run',
+        help='Print number of files to be deleted and approximate size saved'
     )
     parser.add_argument(
         '--auto',
         '-a',
         action='store_true',
         default=False,
-        dest='auto'
+        dest='auto',
+        help='Automatically delete duplicates (leaving one file in place)'
+    )
+    parser.add_argument(
+        '--same-dir-only',
+        '-s',
+        action='store_true',
+        default=False,
+        dest='same_dir_only',
+        help='Only delete duplicates found in the same directory'
     )
     parser.add_argument(
         '--verbose',
         '-v',
         action='store_true',
         default=False,
-        dest='verbose'
+        dest='verbose',
+        help='Set logging level to debug'
     )
     args = parser.parse_args()
 
@@ -218,7 +253,7 @@ def main():
             raise parser.error('{} is not a valid path'.format(folder))
 
     imgdd = ImgDD(folders)
-    imgdd.run(dry_run=args.dry_run, auto=args.auto)
+    imgdd.run(dry_run=args.dry_run, auto=args.auto, same_dir_only=args.same_dir_only)
 
 
 if __name__ == '__main__':
