@@ -1,0 +1,4 @@
+path.py==11.0.1
+pathquery==0.3.0
+pkg-resources==0.0.0
+humanize==0.5.1

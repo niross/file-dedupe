@@ -29,7 +29,7 @@ class ImgDD(object):
     def _build_file_list(directories: list) -> list:
         files = []
         for directory in directories:
-            for path in pathquery(directory).is_not_dir():
+            for path in pathquery(directory).is_not_dir().is_not_symlink():
                 files.append(path)
         return files
 
