@@ -42,11 +42,12 @@ class ImgDD(object):
             files_by_size[size].append(file)
         return {k: v for k, v in files_by_size.items() if len(v) > 1}
 
-    def _confirm_run(self, auto: bool, same_dir_only: bool) -> bool:
-        dirs = '\n'.join(self.directories)
+    def _confirm_run(self, auto: bool, same_dir_only: bool,
+                     preserve_dirs: list=None) -> bool:
+        dirs = '\n\t'.join(self.directories)
         message = (
             '\nFinding duplicate files in the following directories:\n\n'
-            F'{dirs}\n\n'
+            F'\t{dirs}\n\n'
         )
         if same_dir_only:
             message += (
@@ -56,6 +57,12 @@ class ImgDD(object):
 
         if auto:
             message += 'Duplicates will be deleted automatically\n'
+            if preserve_dirs:
+                message += '\nFiles found in the below directories ' \
+                           'will be preserved\n\n'
+                for d in preserve_dirs:
+                    message += '\t{}\n'.format(d)
+                message += '\n'
         else:
             message += 'You will be prompted to select which files to delete\n'
 
@@ -207,9 +214,10 @@ class ImgDD(object):
                                 log.info('Preserving %s', to_delete[i])
                             to_delete.pop(i)
                             break
-            for file in files[1:]:
+            for file in to_delete[1:]:
                 if dry_run:
-                    print('Would be deleted: {}'.format(file))
+                    print('+ Keeping {}'.format(files[0]))
+                    print('- Deleting : {}\n----'.format(file))
                 else:
                     log.info('Deleting duplicate %s', file)
                 if not dry_run:
