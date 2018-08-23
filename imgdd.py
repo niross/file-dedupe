@@ -201,7 +201,10 @@ class ImgDD(object):
                 for i in reversed(range(len(to_delete))):
                     for preserve_path in preserve_dirs:
                         if to_delete[i].startswith(preserve_path):
-                            log.info('Preserving %s', to_delete[i])
+                            if dry_run:
+                                print('Preserving {}'.format(to_delete[i]))
+                            else:
+                                log.info('Preserving %s', to_delete[i])
                             to_delete.pop(i)
                             break
             for file in files[1:]:
