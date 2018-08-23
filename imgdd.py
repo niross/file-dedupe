@@ -66,16 +66,20 @@ class ImgDD(object):
 
         return answer.lower() in ['', 'y']
 
-    def run(self, dry_run=False, auto=False, same_dir_only=False):
+    def run(self, dry_run: bool=False, auto: bool=False,
+            same_dir_only: bool=False, preserve_dirs: list=None):
         if dry_run:
-            self._dry_run(same_dir_only=same_dir_only, auto=auto)
+            self._dry_run(same_dir_only=same_dir_only, auto=auto,
+                          preserve_dirs=preserve_dirs)
             return
 
-        if not self._confirm_run(auto=auto, same_dir_only=same_dir_only):
+        if not self._confirm_run(auto=auto, same_dir_only=same_dir_only,
+                                 preserve_dirs=preserve_dirs):
             return
 
         if auto:
-            self._auto_delete_duplicates(same_dir_only=same_dir_only)
+            self._auto_delete_duplicates(same_dir_only=same_dir_only,
+                                         preserve_dirs=preserve_dirs)
         else:
             self._prompt_delete_duplicates(same_dir_only=same_dir_only)
 
@@ -110,9 +114,10 @@ class ImgDD(object):
                         duplicates.append(list(matches))
         return duplicates
 
-    def _dry_run(self, same_dir_only: bool, auto: bool):
+    def _dry_run(self, same_dir_only: bool, auto: bool, preserve_dirs: list=None):
         if auto:
-            self._auto_delete_duplicates(same_dir_only, dry_run=True)
+            self._auto_delete_duplicates(same_dir_only, dry_run=True,
+                                         preserve_dirs=preserve_dirs)
         else:
             duplicates = self._find_duplicates(same_dir_only=same_dir_only)
 
@@ -186,11 +191,19 @@ class ImgDD(object):
             total_deleted, 's' if total_deleted != 1 else ''
         ))
 
-    def _auto_delete_duplicates(self, same_dir_only: bool, dry_run: bool=False):
+    def _auto_delete_duplicates(self, same_dir_only: bool, dry_run: bool=False,
+                                preserve_dirs: list=None):
         total_deleted = 0
         dupes = self._find_duplicates(same_dir_only=same_dir_only)
         for count, files in enumerate(dupes):
-            # TODO: Need to exclude files in -p directories
+            to_delete = files
+            if preserve_dirs:
+                for i in reversed(range(len(to_delete))):
+                    for preserve_path in preserve_dirs:
+                        if to_delete[i].startswith(preserve_path):
+                            log.info('Preserving %s', to_delete[i])
+                            to_delete.pop(i)
+                            break
             for file in files[1:]:
                 if dry_run:
                     print('Would be deleted: {}'.format(file))
@@ -207,6 +220,18 @@ class ImgDD(object):
             print('Deleted {} duplicate file{}'.format(
                 total_deleted, 's' if total_deleted != 1 else ''
             ))
+
+
+def parse_paths(paths):
+    folders = []
+    for folder in paths:
+        if os.path.exists(folder):
+            folders.append(os.path.realpath(folder))
+        elif os.path.exists(os.path.join(os.path.realpath(__file__), folder)):
+            folders.append(os.path.join(os.path.realpath(__file__), folder))
+        else:
+            raise OSError('{} is not a valid path'.format(folder))
+    return folders
 
 
 def main():
@@ -247,7 +272,7 @@ def main():
         '--preserve-dirs',
         '-p',
         default=None,
-        nargs='+',
+        action='append',
         type=str,
         dest='preserve_dirs',
         help='Duplicates will not be automacially deleted from preserved '
@@ -267,17 +292,25 @@ def main():
         log.setLevel(logging.DEBUG)
 
     # Get a list of folders
-    folders = []
-    for folder in args.folder:
-        if os.path.exists(folder):
-            folders.append(folder)
-        elif os.path.exists(os.path.join(os.path.realpath(__file__), folder)):
-            folders.append(os.path.join(os.path.realpath(__file__), folder))
-        else:
-            raise parser.error('{} is not a valid path'.format(folder))
+    try:
+        folders = parse_paths(args.folder)
+    except OSError as e:
+        raise parser.error(e)
+
+    preserve_dirs = None
+    if args.preserve_dirs is not None:
+        try:
+            preserve_dirs = parse_paths(args.preserve_dirs)
+        except OSError as e:
+            raise parser.error(e)
 
     imgdd = ImgDD(folders)
-    imgdd.run(dry_run=args.dry_run, auto=args.auto, same_dir_only=args.same_dir_only)
+    imgdd.run(
+        dry_run=args.dry_run,
+        auto=args.auto,
+        same_dir_only=args.same_dir_only,
+        preserve_dirs=preserve_dirs
+    )
 
 
 if __name__ == '__main__':
