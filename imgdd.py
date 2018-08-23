@@ -316,12 +316,15 @@ def main():
             raise parser.error(e)
 
     imgdd = ImgDD(folders)
-    imgdd.run(
-        dry_run=args.dry_run,
-        auto=args.auto,
-        same_dir_only=args.same_dir_only,
-        preserve_dirs=preserve_dirs
-    )
+    try:
+        imgdd.run(
+            dry_run=args.dry_run,
+            auto=args.auto,
+            same_dir_only=args.same_dir_only,
+            preserve_dirs=preserve_dirs
+        )
+    except KeyboardInterrupt:
+        print('\nYou killed it!')
 
 
 if __name__ == '__main__':
