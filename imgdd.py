@@ -68,7 +68,7 @@ class ImgDD(object):
 
     def run(self, dry_run=False, auto=False, same_dir_only=False):
         if dry_run:
-            self._dry_run(same_dir_only=same_dir_only)
+            self._dry_run(same_dir_only=same_dir_only, auto=auto)
             return
 
         if not self._confirm_run(auto=auto, same_dir_only=same_dir_only):
@@ -110,28 +110,32 @@ class ImgDD(object):
                         duplicates.append(list(matches))
         return duplicates
 
-    def _dry_run(self, same_dir_only: bool):
-        duplicates = self._find_duplicates(same_dir_only=same_dir_only)
+    def _dry_run(self, same_dir_only: bool, auto: bool):
+        if auto:
+            self._auto_delete_duplicates(same_dir_only, dry_run=True)
+        else:
+            duplicates = self._find_duplicates(same_dir_only=same_dir_only)
 
-        if len(duplicates) == 0:
-            print('No duplicate files found')
-            return
+            if len(duplicates) == 0:
+                print('No duplicate files found')
+                return
 
-        total_duplicates = 0
-        total_savings = 0
-        for dupes in duplicates:
-            total_duplicates += (len(dupes) - 1)
-            size = os.path.getsize(dupes[0])
-            total_savings += size * (len(dupes) - 1)
+            total_duplicates = 0
+            total_savings = 0
+            for dupes in duplicates:
+                total_duplicates += (len(dupes) - 1)
+                size = os.path.getsize(dupes[0])
+                total_savings += size * (len(dupes) - 1)
 
-        print(
-            '\nFound {} duplicate file{}\n'
-            'Deleting these duplicates will free up {} of disk space.\n'.format(
-                total_duplicates,
-                's' if total_duplicates != 1 else '',
-                humanize.naturalsize(total_savings)
+            print(
+                '\nFound {} duplicate file{}\n'
+                'Deleting these duplicates will free up {} '
+                'of disk space.\n'.format(
+                    total_duplicates,
+                    's' if total_duplicates != 1 else '',
+                    humanize.naturalsize(total_savings)
+                )
             )
-        )
 
     @staticmethod
     def _is_valid_input_choice(answer: str, file_count: int) -> bool:
@@ -182,17 +186,27 @@ class ImgDD(object):
             total_deleted, 's' if total_deleted != 1 else ''
         ))
 
-    def _auto_delete_duplicates(self, same_dir_only: bool):
+    def _auto_delete_duplicates(self, same_dir_only: bool, dry_run: bool=False):
         total_deleted = 0
         dupes = self._find_duplicates(same_dir_only=same_dir_only)
         for count, files in enumerate(dupes):
+            # TODO: Need to exclude files in -p directories
             for file in files[1:]:
-                log.info('Deleting duplicate %s', file)
-                os.unlink(file)
+                if dry_run:
+                    print('Would be deleted: {}'.format(file))
+                else:
+                    log.info('Deleting duplicate %s', file)
+                if not dry_run:
+                    os.unlink(file)
                 total_deleted += 1
-        print('Deleted {} duplicate file{}'.format(
-            total_deleted, 's' if total_deleted != 1 else ''
-        ))
+        if dry_run:
+            print('{} file{} would have been automatically deleted'.format(
+                total_deleted, 's' if total_deleted != 1 else ''
+            ))
+        else:
+            print('Deleted {} duplicate file{}'.format(
+                total_deleted, 's' if total_deleted != 1 else ''
+            ))
 
 
 def main():
@@ -228,6 +242,16 @@ def main():
         default=False,
         dest='same_dir_only',
         help='Only delete duplicates found in the same directory'
+    )
+    parser.add_argument(
+        '--preserve-dirs',
+        '-p',
+        default=None,
+        nargs='+',
+        type=str,
+        dest='preserve_dirs',
+        help='Duplicates will not be automacially deleted from preserved '
+             'directories (use in conjunction with --auto)'
     )
     parser.add_argument(
         '--verbose',
