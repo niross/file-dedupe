@@ -18,7 +18,7 @@ log.addHandler(handler)
 log.setLevel(logging.ERROR)
 
 
-class ImgDD(object):
+class FileDD(object):
     files = []
 
     def __init__(self, directories: list):
@@ -316,7 +316,7 @@ def main():
         except OSError as e:
             raise parser.error(e)
 
-    imgdd = ImgDD(folders)
+    imgdd = FileDD(folders)
     try:
         imgdd.run(
             dry_run=args.dry_run,
