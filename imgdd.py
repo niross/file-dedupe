@@ -209,7 +209,7 @@ class ImgDD(object):
                     for preserve_path in preserve_dirs:
                         if to_delete[i].startswith(preserve_path):
                             if dry_run:
-                                print('Preserving {}'.format(to_delete[i]))
+                                print('+ Preserving {}'.format(to_delete[i]))
                             else:
                                 log.info('Preserving %s', to_delete[i])
                             to_delete.pop(i)
@@ -217,12 +217,13 @@ class ImgDD(object):
             for file in to_delete[1:]:
                 if dry_run:
                     print('+ Keeping {}'.format(files[0]))
-                    print('- Deleting : {}\n----'.format(file))
+                    print('- Deleting : {}'.format(file))
                 else:
                     log.info('Deleting duplicate %s', file)
                 if not dry_run:
                     os.unlink(file)
                 total_deleted += 1
+            print('----')
         if dry_run:
             print('{} file{} would have been automatically deleted'.format(
                 total_deleted, 's' if total_deleted != 1 else ''
